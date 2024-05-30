@@ -1,0 +1,22 @@
+https://trac.ffmpeg.org/wiki/Xfade
+
+circlecrop: 圆形裁剪效果
+circleopen: 圆形打开效果
+circleclose: 圆形关闭效果
+dissolve: 溶解效果
+fadeblack: 黑色淡入淡出效果
+fadewhite: 白色淡入淡出效果
+fade: 淡入淡出效果
+horzopen: 水平打开效果
+horzclose: 水平关闭效果
+pixelize: 像素化效果
+radial: 放射状效果
+rectcrop: 矩形裁剪效果
+slideleft: 从右向左滑动效果
+slideright: 从左向右滑动效果
+slideup: 从下向上滑动效果
+slidedown: 从上向下滑动效果
+wipeleft: 从右向左擦除效果
+wiperight: 从左向右擦除效果
+wipeup: 从下向上擦除效果
+wipedown: 从上向下擦除效果

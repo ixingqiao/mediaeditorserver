@@ -1,0 +1,20 @@
+计算公式:
+合并后时长=视频a + 视频b - (duration -1) 例如：
+视频a：5秒 视频b：5秒
+
+duration：1秒 合并后时长：10秒
+duration：2秒 合并后时长：9秒
+duration：3秒 合并后时长：8秒
+duration：4秒 合并后时长：7秒
+duration：5秒 合并后时长：6秒
+
+duration 不能超过视频a的时长信息，否则无法执行视频合并
+
+      |<--offset
+      |<--duration-->|
+AAAAAAAAAAAAAAAAAAAAAA
+      BBBBBBBBBBBBBBBBBBBBBBBBBBB
+
+应用后的输出：
+      |<--duration-->|
+AAAAAAABABABABABABABABBBBBBBBBBBB

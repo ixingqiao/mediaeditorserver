@@ -1,0 +1,4 @@
+[INFO] 2024-05-22 13:53:19 - Using 31 transitions with 1-second interval.
+[INFO] 2024-05-22 13:53:19 - Using transitions : fade
+[INFO] 2024-05-22 13:53:19 - Filter complex generation completed.
+[INFO] 2024-05-22 13:53:19 - ffmpeg -hide_banner -hwaccel nvdec -i "r_2.mp4" -hwaccel nvdec -i "r_3.mp4"     -filter_complex_script "_vfstr_.txt"     -map [outv]  -c:v h264_nvenc -keyint_min 72 -g 72 -sc_threshold 0 -b:v 3000k -minrate 3000k -maxrate 6000k -bufsize 6000k -b:a 128k -avoid_negative_ts make_zero -fflags +genpts     -y "merge/ffmpeg-xfade-concat.mp4"
