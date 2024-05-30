@@ -49,16 +49,17 @@ def generate_unique_filename():
     """生成包含时间戳和哈希的唯一文件名"""
     timestamp = time.strftime('%Y%m%d%H%M%S')
     hash_object = hashlib.sha256(os.urandom(32))
-    hash_str = hash_object.hexdigest()[:16]
-    return f"{XFADE_OUTPUT_PATH}/xfade-{timestamp}-{hash_str}.mp4"
+    hash_str = hash_object.hexdigest()[:8]
+    return f"{XFADE_OUTPUT_PATH}/merge-{timestamp}-{hash_str}.mp4"
 
 def terminate_process_and_children(proc):
     """终止进程及其子进程"""
     try:
-        logger.info(f'terminating process: {proc.pid}')
+        logger.error(f'terminating process: {proc.pid}')
         parent = psutil.Process(proc.pid)
         children = parent.children(recursive=True)
         for child in children:
+            logger.error(f'terminating child process: {child.pid}')
             child.kill()
         psutil.wait_procs(children, timeout=5)  # 等待子进程终止
         parent.terminate()  # 终止父进程
@@ -111,18 +112,19 @@ def execute_task(notification_url, task_id, video_files, transitions, output_pat
 
         #实时刷新任务日志
         def log_output(proc, task_id):
-            logger.info("log_output thread begin")
+            logger.info("log thread begin for process: {proc.pid}")
             for line in iter(proc.stdout.readline, ''):
                 if line:
                     logger.info(f'task_id:{task_id} {line.strip()}')
             logger.info("log_output thread end")
 
-        log_thread = threading.Thread(target=log_output, args=(proc, task_id))
+        log_thread = threading.Thread(target=log_output, args=(proc, task_id),name="log_output")
         log_thread.start()
         
         try:
-            stdout, _ = proc.communicate(timeout=600)
-            log_thread.join()
+            # 任务的最大运行时间
+            proc.wait(timeout=300)
+            # terminate_process_and_children(proc)
             # logger.info(f'{stdout}')
             if proc.returncode != 0:
                 error_message = f'Task failed: {proc.returncode}'
@@ -138,6 +140,10 @@ def execute_task(notification_url, task_id, video_files, transitions, output_pat
         error_message = f'Error executing task: {e}'
         logger.error(error_message)
     finally:
+        log_thread.join(timeout=5)  # 等待线程结束
+        if log_thread.is_alive():
+            logger.error("log thread, killing")
+            log_thread.kill()
         # 释放并行任务计数器
         with lock:
             current_tasks -= 1
@@ -193,9 +199,9 @@ def merge_video():
             logger.info(f'number of tasks: {current_tasks}')
         try:
             # 执行视频拼接线程
-            task_id = hashlib.md5((str(time.time()) + output_path).encode('utf-8')).hexdigest()
+            task_id = hashlib.md5((str(time.time()) + output_path).encode('utf-8')).hexdigest()[:8]
             logger.info(f'Task: {task_id} {video_files} {transitions} {output_path} {interval} {notification_url}')
-            task_thread = threading.Thread(target=execute_task, args=(notification_url, task_id, video_files, transitions, output_path, interval))
+            task_thread = threading.Thread(target=execute_task, args=(notification_url, task_id, video_files, transitions, output_path, interval), name="execute_task")
             task_thread.start()
         except Exception as e:
             with lock:

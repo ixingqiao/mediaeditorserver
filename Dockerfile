@@ -39,6 +39,9 @@ ENV LD_LIBRARY_PATH /usr/local/cuda/lib64:$LD_LIBRARY_PATH
 
 EXPOSE 7070/tcp
 
+# 关闭core文件生成
+RUN ulimit -c 0
+
 # 设置容器启动命令
 CMD ["/opt/umes/venv/bin/python", "/opt/umes/media_editor_server.py"]
 
