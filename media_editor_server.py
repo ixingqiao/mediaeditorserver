@@ -117,13 +117,13 @@ def execute_task(notification_url, task_id, video_files, transitions, output_pat
                     logger.info(f'task_id:{task_id} {line.strip()}')
             logger.info("log_output thread end")
 
-        # log_thread = threading.Thread(target=log_output, args=(proc, task_id))
-        # log_thread.start()
+        log_thread = threading.Thread(target=log_output, args=(proc, task_id))
+        log_thread.start()
         
         try:
             stdout, _ = proc.communicate(timeout=600)
-            # log_thread.join()
-            logger.info(f'{stdout}')
+            log_thread.join()
+            # logger.info(f'{stdout}')
             if proc.returncode != 0:
                 error_message = f'Task failed: {proc.returncode}'
                 logger.error(error_message)
