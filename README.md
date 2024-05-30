@@ -55,3 +55,19 @@
 - wipeup: 从下向上擦除效果
 - wipedown: 从上向下擦除效果
 
+# docker构建
+由于使用的是Ubuntu 24.04 所以需要主机系统18.04(含)之后，docker版本需要大于Docker version 20.10.10，
+构建命令可参照：
+sudo bash ./generate_version.sh
+tag_time=$(date "+.%Y%m%d")
+image_tag2=${image_tag}${tag_time}
+platform=x86_64
+image_name2=${image_name}"-"${platform}
+sudo docker build --force-rm --no-cache -f=./Dockerfile -t ${image_name2}:${image_tag2} .
+
+# 服务运行
+如下命令运行：docker run -itd --gpus all -e NVIDIA_DRIVER_CAPABILITIES=all --name umes --hostname umes --privileged=true --net=host -v /data/:/data -v /usr/local/cuda/:/usr/local/cuda/ umes-x86:1.0.1.20240522
+
+服务运行的工作目录/opt/umes/ 默认端口：7070
+
+可以参照doc/视频拼接服务接口文档.docx简单的接口介绍和源代码通过postman即可进行接口测试
