@@ -1,6 +1,6 @@
 #!/bin/bash
 # Description: This script concatenates multiple MP4 files with specified transitions between them using GPU for hardware acceleration and scaling.
-# Usage: ./xfade-transitions.sh [--srcdir directory] [--files /path/to/1.mp4 /path/to/2.mp4 ...] [--transitions fade wipeleft ...] [--output ./concat/file.mp4] [--interval 1] [--bgmusic /path/to/music.mp3]
+# Usage: ./xfade-transitions.sh [--srcdir directory] [--files /path/to/1.mp4 /path/to/2.mp4 ...] [--transitions fade wipeleft ...] [--output ./concat/file.mp4] [--interval 1]
 # Note: If options are not provided, default values will be used.
 
 # Global variables
@@ -9,11 +9,10 @@ default_transitions=("circlecrop" "circleopen" "circleclose" "dissolve" "fadebla
 default_interval=1
 output_file="$output_dir/xfade-concat.mp4"
 src_dir="."
-bg_music=""
 
 # Help message function
 function display_help() {
-    echo "Usage: $0 [--srcdir directory] [--files /path/to/1.mp4 /path/to/2.mp4 ...] [--transitions fade wipeleft ...] [--output ./concat/file.mp4] [--interval 1] [--bgmusic /path/to/music.mp3]"
+    echo "Usage: $0 [--srcdir directory] [--files /path/to/1.mp4 /path/to/2.mp4 ...] [--transitions fade wipeleft ...] [--output ./concat/file.mp4] [--interval 1]"
     echo "Concatenates multiple MP4 files with transitions between them."
     echo "Options:"
     echo "  --srcdir directory               Specify the directory containing MP4 files (default: current directory)"
@@ -21,7 +20,6 @@ function display_help() {
     echo "  --transitions fade wipeleft ...  Specify the transitions to use (default: fade wipeleft wiperight wipeup wipedown)"
     echo "  --output ./concat/file.mp4       Specify the output file path and name (default: merge/ffmpeg-xfade-concat.mp4)"
     echo "  --interval 1                     Specify the duration of transitions in seconds (default: 1)"
-    echo "  --bgmusic /path/to/music.mp3     Specify the background music file (default: no background music)"
 }
 
 # Logging function
@@ -65,11 +63,9 @@ function check_video_parameters() {
 # Generate filter_complex string
 function generate_filter_complex() {
     local vfstr=""
-    local afstr=""
     for i in "${index_array[@]}"; do
         catlen=$(echo "${duration_array[$i]}-${interval}" | bc -l)
         vfstr+="[$i:v]split[v${i}00][v${i}10];"
-        afstr+="[$i:a]asplit[a${i}00][a${i}10];"
     done
 
     for i in "${index_array[@]}"; do
@@ -77,47 +73,32 @@ function generate_filter_complex() {
         vfstr+="[v${i}00]trim=0:$catlen[v${i}01];"
         vfstr+="[v${i}10]trim=$catlen:${duration_array[$i]}[v${i}11t];"
         vfstr+="[v${i}11t]setpts=PTS-STARTPTS[v${i}11];"
-        afstr+="[a${i}00]atrim=0:$catlen[a${i}01];"
-        afstr+="[a${i}10]atrim=$catlen:${duration_array[$i]}[a${i}11t];"
-        afstr+="[a${i}11t]asetpts=PTS-STARTPTS[a${i}11];"
     done
 
     for ((i=0; i<$line; ++i)); do
         Index=$((i % length))
         log "Using transition: ${transitions[$Index]}"
         vfstr+="[v${i}11][v$((i+1))01]xfade=duration=${interval}:transition=${transitions[$Index]}[vt${i}];"
-        afstr+="[a${i}11][a$((i+1))01]acrossfade=d=${interval}[at${i}];"
     done
 
     vfstr+="[v001]"
-    afstr+="[a001]"
     for ((i=0; i<$line; ++i)); do
         vfstr+="[vt${i}]"
-        afstr+="[at${i}]"
     done
     vfstr+="[v${line}11]concat=n=$((line+2))[outv];"
-    afstr+="[a${line}11]concat=n=$((line+2)):v=0:a=1[outa];"
-
-    concatenate_with_transitions_and_music "$vfstr" "$afstr"
+    concatenate_with_transitions "$vfstr"
 }
 
-# Concatenate videos with transitions and add background music
-function concatenate_with_transitions_and_music() {
+# Concatenate videos with transitions
+function concatenate_with_transitions() {
     local infile=""
     for file in "${filename_array[@]}"; do
         infile+=" -hwaccel nvdec -i \"$file\""
     done
 
-    local music_input=""
-    local music_filter=""
-    if [[ -n $bg_music ]]; then
-        music_input="-i \"$bg_music\""
-        music_filter="[outa][${#index_array[@]}:a]amix=inputs=2:duration=first:dropout_transition=2[outa]"
-    fi
-
-    local cmd="ffmpeg -hide_banner${infile} ${music_input} \
-    -filter_complex_script <(echo \"$1 $2 $music_filter\") \
-    -map [outv] -map [outa] ${x264} ${ki} ${br} \
+    local cmd="ffmpeg -hide_banner${infile} \
+    -filter_complex_script <(echo \"$1\") \
+    -map [outv] ${x264} ${ki} ${br} \
     -y \"$output_file\" 2>&1 "
     log "$cmd"
     bash -c "$cmd"
@@ -158,11 +139,6 @@ while [[ "$#" -gt 0 ]]; do
         --interval)
             shift
             interval="$1"
-            shift
-            ;;
-        --bgmusic)
-            shift
-            bg_music="$1"
             shift
             ;;
         --help)
