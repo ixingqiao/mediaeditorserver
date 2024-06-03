@@ -122,11 +122,13 @@ function concatenate_with_transitions() {
 }
 
 function add_background_music() {
+    log "add bgm begin."
     local temp_output="${output_file}_temp.mp4"
     local loop_filter=""
     if [[ -n "$bg_music" && $loop_bg_music == true ]]; then
         loop_filter="-stream_loop -1"
     fi
+    local total_duration=$(get_video_duration "$output_file")
 
     local cmd="ffmpeg -hide_banner -an -i \"$output_file\" $loop_filter -i \"$bg_music\" \
         -c:v copy -c:a aac -map 0:v -map 1:a -t ${total_duration} -fflags +genpts -y \"$temp_output\" 2>&1"
@@ -135,14 +137,14 @@ function add_background_music() {
 
     # 检查 FFmpeg 命令是否成功执行
     if [ $? -ne 0 ]; then
-        log_error "Failed to add background music."
+        log_error "Failed to add bgm."
         # rm -rf $temp_output
         exit 4
     fi
 
     # 如果成功，再将临时输出文件覆盖原始视频文件
     mv "$temp_output" "$output_file"
-    log "Background music added successfully."
+    log "add bgm successfully."
 }
 
 # Parse arguments
@@ -239,7 +241,6 @@ log "xfade started."
 
 # 初始化行数计数器
 line=-1
-total_duration=0
 
 # 获取输入MP4文件的持续时间
 duration_array=()
@@ -251,7 +252,6 @@ for file in "${files[@]}"; do
     duration_array[$line]=$(get_video_duration "$file")
     filename_array[$line]=$file
     index_array[$line]=$line
-    total_duration=$(echo "${total_duration} + ${duration_array[$line]}" | bc -l)
 done
 # 检查视频参数是否一致
 check_video_parameters "${filename_array[0]}" "${filename_array[@]:1}"
