@@ -37,6 +37,8 @@ DEFAULT_NOTIFICATION_URL = 'http://127.0.0.1:7070/index/api/OnNotify'
 
 # 最大并行任务数
 MAX_CONCURRENT_TASKS = 5
+# 最大可执行时间单位秒
+MAX_TASK_EXECUTE_TIME_S = 300
 # 并行任务计数器
 current_tasks = 0
 # 任务ID计数器
@@ -89,8 +91,8 @@ def send_task_status_notification(notification_url, task_id, status, message, ou
                 logger.error(f'exceptiton to send notification for task {task_id} on attempt {attempt + 1}: {e}')
             time.sleep(attempt * 5)  # 重试5次
 
-def execute_task(notification_url, task_id, video_files, transitions, output_path, interval):
-    logger.info(f'execute_task begin {task_id} {output_path}')
+def execute_task(notification_url, task_id, video_files, transitions, output_path, interval,bgMusic):
+    logger.info(f'execute task begin {task_id} {output_path} {bgMusic}')
     global current_tasks
     try:
         # 生成命令
@@ -103,6 +105,9 @@ def execute_task(notification_url, task_id, video_files, transitions, output_pat
             cmd.extend(['--output', output_path])
         if interval:
             cmd.extend(['--interval', str(interval)])
+        if bgMusic:
+            cmd.extend(['--bgmusic', bgMusic])
+            cmd.extend(['--loopbgmusic'])
 
         # 运行命令
         status = 'failed'
@@ -112,18 +117,18 @@ def execute_task(notification_url, task_id, video_files, transitions, output_pat
 
         #实时刷新任务日志
         def log_output(proc, task_id):
-            logger.info("log thread begin for process: {proc.pid}")
+            logger.info(f"log thread begin for process: {proc.pid}")
             for line in iter(proc.stdout.readline, ''):
                 if line:
                     logger.info(f'task_id:{task_id} {line.strip()}')
-            logger.info("log_output thread end")
+            logger.info("log thread end")
 
         log_thread = threading.Thread(target=log_output, args=(proc, task_id),name="log_output")
         log_thread.start()
         
         try:
             # 任务的最大运行时间
-            proc.wait(timeout=300)
+            proc.wait(timeout=MAX_TASK_EXECUTE_TIME_S)
             # terminate_process_and_children(proc)
             # logger.info(f'{stdout}')
             if proc.returncode != 0:
@@ -150,7 +155,7 @@ def execute_task(notification_url, task_id, video_files, transitions, output_pat
             logger.info(f'number of tasks: {current_tasks}')
         # 发送任务执行结果通知
         send_task_status_notification(notification_url, task_id, status, error_message, output_path)
-        logger.info(f'execute_task end')
+        logger.info(f'execute task end')
 
 @app.route('/index/api/videoCombiner', methods=['POST'])
 def merge_video():
@@ -164,6 +169,7 @@ def merge_video():
         transitions = post_params.get('transitions', [])
         output_path = post_params.get('outputFile', generate_unique_filename())
         interval = post_params.get('interval', 2)
+        bgMusic = post_params.get('bgMusic', '')
         notification_url = post_params.get('notificationUrl', DEFAULT_NOTIFICATION_URL)
 
         if not isinstance(video_files, list) or not all(isinstance(item, str) for item in video_files):
@@ -185,6 +191,10 @@ def merge_video():
             logger.error('Invalid interval parameter')
             return jsonify({'code': 1006, 'msg': 'Invalid input: interval must be a positive integer'}), 400
 
+        if not isinstance(bgMusic, str) or bgMusic and not os.path.isfile(bgMusic):
+            logger.error('Invalid interval parameter')
+            return jsonify({'code': 1006, 'msg': 'Invalid input: bgMusic'}), 400
+            
         if notification_url and not isinstance(notification_url, str):
             logger.error('Invalid notificationUrl parameter')
             return jsonify({'code': 1009, 'msg': 'Invalid input: notificationUrl must be a string'}), 400
@@ -200,8 +210,8 @@ def merge_video():
         try:
             # 执行视频拼接线程
             task_id = hashlib.md5((str(time.time()) + output_path).encode('utf-8')).hexdigest()[:8]
-            logger.info(f'Task: {task_id} {video_files} {transitions} {output_path} {interval} {notification_url}')
-            task_thread = threading.Thread(target=execute_task, args=(notification_url, task_id, video_files, transitions, output_path, interval), name="execute_task")
+            logger.info(f'Task: {task_id} {video_files} {transitions} {output_path} {interval} {notification_url} {bgMusic}')
+            task_thread = threading.Thread(target=execute_task, args=(notification_url, task_id, video_files, transitions, output_path, interval, bgMusic), name="execute_task")
             task_thread.start()
         except Exception as e:
             with lock:
@@ -221,10 +231,11 @@ def status():
         'code': 0, 
         'msg': '', 
         'data': {
-            'currTasks': current_tasks, 
+            'currTasks': current_tasks,
             'maxTasks': MAX_CONCURRENT_TASKS,
-            'taskCounter':task_counter, 
-            'defaultOutputPath':XFADE_OUTPUT_PATH, 
+            'taskCounter':task_counter,
+            'defaultOutputPath':XFADE_OUTPUT_PATH,
+            'maxTaskExecuteSecond':MAX_TASK_EXECUTE_TIME_S,
             'defaultNotifyUrl': DEFAULT_NOTIFICATION_URL
          }
     })

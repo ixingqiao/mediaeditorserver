@@ -1,25 +1,33 @@
 #!/bin/bash
 # Description: This script concatenates multiple MP4 files with specified transitions between them using GPU for hardware acceleration and scaling.
-# Usage: ./xfade-transitions.sh [--srcdir directory] [--files /path/to/1.mp4 /path/to/2.mp4 ...] [--transitions fade wipeleft ...] [--output ./concat/file.mp4] [--interval 1]
+# Usage: ./xfade-transitions.sh [--srcdir directory] [--files /path/to/1.mp4 /path/to/2.mp4 ...] [--transitions fade wipeleft ...] [--output ./concat/file.mp4] [--interval 1] [--bgmusic /path/to/bgmusic.mp3] [--loopbgmusic]
 # Note: If options are not provided, default values will be used.
 
 # Global variables
 output_dir="./merge"
-default_transitions=("circlecrop" "circleopen" "circleclose" "dissolve" "fadeblack" "fadewhite" "fade" "horzopen" "horzclose" "pixelize")
+default_transitions=("circlecrop" "circleopen" "circleclose" "dissolve" "fadeblack" "fadewhite" "fade" "horzopen" "horzclose")
 default_interval=1
 output_file="$output_dir/xfade-concat.mp4"
 src_dir="."
+bg_music=""
+loop_bg_music=false
+# 视频设置
+x264=" -c:v h264_nvenc"
+ki="-keyint_min 72 -g 72 -sc_threshold 0"
+br="-b:v 3000k -minrate 3000k -maxrate 6000k -bufsize 6000k -b:a 128k -avoid_negative_ts make_zero -fflags +genpts"
 
 # Help message function
 function display_help() {
-    echo "Usage: $0 [--srcdir directory] [--files /path/to/1.mp4 /path/to/2.mp4 ...] [--transitions fade wipeleft ...] [--output ./concat/file.mp4] [--interval 1]"
+    echo "Usage: $0 [--srcdir directory] [--files /path/to/1.mp4 /path/to/2.mp4 ...] [--transitions fade wipeleft ...] [--output ./concat/file.mp4] [--interval 1] [--bgmusic /path/to/bgmusic.mp3] [--loopbgmusic]"
     echo "Concatenates multiple MP4 files with transitions between them."
     echo "Options:"
     echo "  --srcdir directory               Specify the directory containing MP4 files (default: current directory)"
-    echo "  --files /path/to/1.mp4 /path/to/2.mp4 ...          Specify the MP4 files to concatenate (default: all MP4 files in srcdir)"
+    echo "  --files /path/to/1.mp4 /path/to/2.mp4 ...  Specify the MP4 files to concatenate (default: all MP4 files in srcdir)"
     echo "  --transitions fade wipeleft ...  Specify the transitions to use (default: fade wipeleft wiperight wipeup wipedown)"
     echo "  --output ./concat/file.mp4       Specify the output file path and name (default: merge/ffmpeg-xfade-concat.mp4)"
     echo "  --interval 1                     Specify the duration of transitions in seconds (default: 1)"
+    echo "  --bgmusic /path/to/bgmusic.mp3   Specify the background music file path (default: none)"
+    echo "  --loopbgmusic                    Loop the background music if its duration is shorter than the concatenated video (default: false)"
 }
 
 # Logging function
@@ -54,7 +62,7 @@ function check_video_parameters() {
     for file in "$@"; do
         if ! ffprobe -v error -select_streams v:0 -show_entries stream=r_frame_rate,width,height -of csv=p=0 "$first_file" | grep -q "$(ffprobe -v error -select_streams v:0 -show_entries stream=r_frame_rate,width,height -of csv=p=0 "$file")"; then
             log_error "Video parameters are inconsistent. Aborting concatenation."
-            exit 1
+            exit 2
         fi
     done
     log "check_video_parameters end"
@@ -64,12 +72,12 @@ function check_video_parameters() {
 function generate_filter_complex() {
     local vfstr=""
     for i in "${index_array[@]}"; do
-        catlen=$(echo "${duration_array[$i]}-${interval}" | bc -l)
+        catlen=$(echo "scale=3;${duration_array[$i]}-${interval}" | bc -l)
         vfstr+="[$i:v]split[v${i}00][v${i}10];"
     done
 
     for i in "${index_array[@]}"; do
-        catlen=$(echo "${duration_array[$i]}-${interval}" | bc -l)
+        catlen=$(echo "scale=3; ${duration_array[$i]}-${interval}" | bc -l)
         vfstr+="[v${i}00]trim=0:$catlen[v${i}01];"
         vfstr+="[v${i}10]trim=$catlen:${duration_array[$i]}[v${i}11t];"
         vfstr+="[v${i}11t]setpts=PTS-STARTPTS[v${i}11];"
@@ -87,6 +95,9 @@ function generate_filter_complex() {
     done
     vfstr+="[v${line}11]concat=n=$((line+2))[outv];"
     concatenate_with_transitions "$vfstr"
+    if [[ -n "$bg_music" ]]; then
+        add_background_music
+    fi
 }
 
 # Concatenate videos with transitions
@@ -102,6 +113,36 @@ function concatenate_with_transitions() {
     -y \"$output_file\" 2>&1 "
     log "$cmd"
     bash -c "$cmd"
+    # Check if FFmpeg command succeeded
+    if [ $? -ne 0 ]; then
+        log_error "FFmpeg failed to process the video files."
+        # rm -rf $output_file
+        exit 3
+    fi
+}
+
+function add_background_music() {
+    local temp_output="${output_file}_temp.mp4"
+    local loop_filter=""
+    if [[ -n "$bg_music" && $loop_bg_music == true ]]; then
+        loop_filter="-stream_loop -1"
+    fi
+
+    local cmd="ffmpeg -hide_banner -an -i \"$output_file\" $loop_filter -i \"$bg_music\" \
+        -c:v copy -c:a aac -map 0:v -map 1:a -t ${total_duration} -fflags +genpts -y \"$temp_output\" 2>&1"
+    log "add music $cmd"
+    bash -c "$cmd"
+
+    # 检查 FFmpeg 命令是否成功执行
+    if [ $? -ne 0 ]; then
+        log_error "Failed to add background music."
+        # rm -rf $temp_output
+        exit 4
+    fi
+
+    # 如果成功，再将临时输出文件覆盖原始视频文件
+    mv "$temp_output" "$output_file"
+    log "Background music added successfully."
 }
 
 # Parse arguments
@@ -141,6 +182,15 @@ while [[ "$#" -gt 0 ]]; do
             interval="$1"
             shift
             ;;
+        --bgmusic)
+            shift
+            bg_music="$1"
+            shift
+            ;;
+        --loopbgmusic)
+            loop_bg_music=true
+            shift
+            ;;
         --help)
             display_help
             exit 0
@@ -148,7 +198,7 @@ while [[ "$#" -gt 0 ]]; do
         *)
             echo "Error: Unknown option: $1" >&2
             display_help
-            exit 1
+            exit 4
             ;;
     esac
 done
@@ -163,7 +213,7 @@ if [[ ${#files[@]} -eq 0 ]]; then
     fi
 fi
 
-if [ ${#transitions[@]} -lt 1 ]; then
+if [[ ${#transitions[@]} -lt 1 ]]; then
     transitions=("${default_transitions[@]}")
 fi
 
@@ -176,7 +226,7 @@ if [[ -z $output_specified || $output_specified = false ]]; then
     if [[ ! -d "$output_dir" ]]; then
         mkdir -p "$output_dir" || {
             log_error "Failed to create output directory: $output_dir"
-            exit 1
+            exit 5
         }
     fi
     output_file="$output_dir/xfade-concat.mp4"
@@ -189,6 +239,7 @@ log "xfade started."
 
 # 初始化行数计数器
 line=-1
+total_duration=0
 
 # 获取输入MP4文件的持续时间
 duration_array=()
@@ -200,18 +251,18 @@ for file in "${files[@]}"; do
     duration_array[$line]=$(get_video_duration "$file")
     filename_array[$line]=$file
     index_array[$line]=$line
+    total_duration=$(echo "${total_duration} + ${duration_array[$line]}" | bc -l)
 done
-
-# 视频设置
-x264=" -c:v h264_nvenc"
-ki="-keyint_min 72 -g 72 -sc_threshold 0"
-br="-b:v 3000k -minrate 3000k -maxrate 6000k -bufsize 6000k -b:a 128k -avoid_negative_ts make_zero -fflags +genpts"
-
 # 检查视频参数是否一致
 check_video_parameters "${filename_array[0]}" "${filename_array[@]:1}"
 
 # transitions数组的长度
 length=${#transitions[@]}
+# 确保 length 非零以避免除零错误
+if [[ $length -eq 0 ]]; then
+    log_error "No transitions specified. Aborting."
+    exit 6
+fi
 
 # 记录转换信息
 log "Using ${length} transitions with ${interval}-second interval."
