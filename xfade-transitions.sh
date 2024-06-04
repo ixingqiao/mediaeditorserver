@@ -40,6 +40,31 @@ function log_error() {
     echo "$(date +"%Y-%m-%d %H:%M:%S") - ERROR - xfade - $1"
 }
 
+# Function to safely remove files
+function safe_remove() {
+    for file in "$@"; do
+        if [ -f "$file" ]; then
+            log_error "Removing file: $file"
+            rm -f "$file"
+        else
+            log_error "File not found: $file"
+        fi
+    done
+}
+
+
+# 函数获取并记录内存状态
+function log_memory_status() {
+    local free_output=$(free -h)
+    log_error "$free_output"
+}
+
+# 函数获取并记录 GPU 状态
+function log_gpu_status() {
+    local nvidia_output=$(nvidia-smi --query-gpu=memory.total,memory.used,memory.free --format=csv)
+    log_error "$nvidia_output"
+}
+
 # Check if FFmpeg is installed
 function check_ffmpeg() {
     if ! command -v ffmpeg &>/dev/null; then
@@ -116,7 +141,9 @@ function concatenate_with_transitions() {
     # Check if FFmpeg command succeeded
     if [ $? -ne 0 ]; then
         log_error "FFmpeg failed to process the video files."
-        # rm -rf $output_file
+        log_memory_status
+        log_gpu_status
+        safe_remove $output_file
         exit 3
     fi
 }
@@ -138,7 +165,9 @@ function add_background_music() {
     # 检查 FFmpeg 命令是否成功执行
     if [ $? -ne 0 ]; then
         log_error "Failed to add bgm."
-        # rm -rf $temp_output
+        log_memory_status
+        log_gpu_status
+        safe_remove $output_file $temp_output
         exit 4
     fi
 
