@@ -1,0 +1,141 @@
+{
+	"info": {
+		"_postman_id": "3bac5cd4-fc42-4534-9f8b-f2d8a5b9449b",
+		"name": "视频拼接",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "提交拼接任务",
+			"event": [
+				{
+					"listen": "prerequest",
+					"script": {
+						"exec": [
+							"// 获取当前时间并格式化为指定格式\r",
+							"const date = new Date();\r",
+							"date.setHours(date.getHours() + 8); // 增加8个小时以转换为北京时间\r",
+							"pm.environment.set(\"current_time\", date.toISOString().replace(\"T\", \" \").slice(0, -1));"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"videoFiles\": [\"/data/huaxue/huaxue_0000.mp4\",\"/data/huaxue/huaxue_0007.mp4\", \"/data/huaxue/huaxue_0008.mp4\",\"/data/huaxue/huaxue_0021.mp4\", \"/data/huaxue/huaxue_0025.mp4\"],\r\n    \"transitions\": [\"circlecrop\", \"rectcrop\",\"slideright\",\"pixelize\"],\r\n    \"interval\": 1,\r\n    \"bgMusic\":\"/data/bgm/只要平凡.ogg\"\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{UMES_URL}}/index/api/videoCombiner",
+					"host": [
+						"{{UMES_URL}}"
+					],
+					"path": [
+						"index",
+						"api",
+						"videoCombiner"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "版本信息",
+			"event": [
+				{
+					"listen": "prerequest",
+					"script": {
+						"exec": [
+							"// 获取当前时间并格式化为指定格式\r",
+							"const date = new Date();\r",
+							"date.setHours(date.getHours() + 8); // 增加8个小时以转换为北京时间\r",
+							"pm.environment.set(\"current_time\", date.toISOString().replace(\"T\", \" \").slice(0, -1));"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"protocolProfileBehavior": {
+				"disableBodyPruning": true
+			},
+			"request": {
+				"method": "GET",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"srcDir\": \"/data/90\",\r\n    \"transitions\": [\"circleopen\", \"fade\", \"wipeleft\"]\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{UMES_URL}}/index/api/version",
+					"host": [
+						"{{UMES_URL}}"
+					],
+					"path": [
+						"index",
+						"api",
+						"version"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "任务状态",
+			"event": [
+				{
+					"listen": "prerequest",
+					"script": {
+						"exec": [
+							"// 获取当前时间并格式化为指定格式\r",
+							"const date = new Date();\r",
+							"date.setHours(date.getHours() + 8); // 增加8个小时以转换为北京时间\r",
+							"pm.environment.set(\"current_time\", date.toISOString().replace(\"T\", \" \").slice(0, -1));"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"protocolProfileBehavior": {
+				"disableBodyPruning": true
+			},
+			"request": {
+				"method": "GET",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"srcDir\": \"/data/90\",\r\n    \"transitions\": [\"circleopen\", \"fade\", \"wipeleft\"]\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{UMES_URL}}/index/api/tasksStatus",
+					"host": [
+						"{{UMES_URL}}"
+					],
+					"path": [
+						"index",
+						"api",
+						"tasksStatus"
+					]
+				}
+			},
+			"response": []
+		}
+	]
+}
