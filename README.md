@@ -74,7 +74,8 @@ sudo docker build --force-rm --no-cache -f=./Dockerfile -t ${image_name2}:${imag
 
 # 系统内核调优
 
-结合系统本身硬件情况调优，根据如下系统和业务场景的调优参数如下：
+## 结合系统本身硬件情况调优，根据如下系统和业务场景的调优参数如下：
+```bash
 root@alg-dev17:~# free -h
                total        used        free      shared  buff/cache   available
 Mem:            15Gi       3.5Gi       4.6Gi        62Mi       7.5Gi       6.3Gi
@@ -120,9 +121,12 @@ kernel.watchdog_thresh=30
 EOF
 
 sysctl -p
+```
 
-在高压力的情况下还是需要定期整理内存，否则会显存报错，根据业务压力调整时间周期
+## 在高压力的情况下还是需要定期整理内存，否则会显存报错，根据业务压力调整时间周期
+```bash
 sync&&echo 3 > /proc/sys/vm/drop_caches
+```
 
 # 授权协议
 本项目自有代码使用宽松的MIT协议，在保留版权信息的情况下可以自由应用于各自商用、非商业的项目。 但是本项目也零碎的使用了一些其他的开源代码，在商用的情况下请自行替代或剔除； 由于使用本项目而产生的商业纠纷或侵权行为一概与本项目及开发者无关，请自行承担法律风险。 在使用本项目代码时，也应该在授权协议中同时表明本项目依赖的第三方库的协议。
