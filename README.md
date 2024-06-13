@@ -72,6 +72,58 @@ sudo docker build --force-rm --no-cache -f=./Dockerfile -t ${image_name2}:${imag
 
 可以参照doc/视频拼接服务接口文档.docx简单的接口介绍和源代码通过postman即可进行接口测试
 
+# 系统内核调优
+
+结合系统本身硬件情况调优，根据如下系统和业务场景的调优参数如下：
+root@alg-dev17:~# free -h
+               total        used        free      shared  buff/cache   available
+Mem:            15Gi       3.5Gi       4.6Gi        62Mi       7.5Gi       6.3Gi
+Swap:          3.8Gi       2.0Mi       3.8Gi
+cat >> /etc/sysctl.conf <<- EOF
+vm.min_free_kbytes = 450000
+vm.watermark_scale_factor=500 
+vm.swappiness = 60
+vm.dirty_background_ratio = 10
+vm.dirty_ratio = 20
+vm.dirty_expire_centisecs = 50
+vm.dirty_writeback_centisecs = 50
+vm.vfs_cache_pressure = 1000
+vm.extfrag_threshold = 200
+vm.dirtytime_expire_seconds = 300
+kernel.numa_balancing=0
+net.ipv4.tcp_syncookies = 0
+net.ipv4.tcp_tw_reuse = 1
+net.ipv4.tcp_tw_recycle = 1
+net.ipv4.tcp_syn_retries = 2
+net.ipv4.tcp_synack_retries = 2
+net.ipv4.tcp_max_syn_backlog = 65535
+net.ipv4.tcp_fin_timeout = 30
+net.ipv4.tcp_max_tw_buckets = 20000
+net.ipv4.tcp_keepalive_time = 120
+net.ipv4.tcp_keepalive_intvl = 5
+net.ipv4.tcp_keepalive_probes = 3
+net.ipv4.tcp_mem = 94500000 915000000 927000000
+net.core.somaxconn = 65535
+net.ipv4.ip_local_port_range = 1024 65536
+net.core.rmem_max=16777216
+net.core.wmem_max=16777216
+net.ipv4.tcp_rmem=4096 87380 16777216
+net.ipv4.tcp_wmem=4096 65536 16777216
+net.ipv4.tcp_timestamps = 0
+net.ipv4.tcp_window_scaling = 0
+net.ipv4.tcp_sack = 0
+net.core.netdev_max_backlog = 30000
+net.ipv4.tcp_no_metrics_save=1
+net.ipv4.tcp_max_orphans = 262144
+fs.file-max = 6553600
+kernel.watchdog_thresh=30
+EOF
+
+sysctl -p
+
+在高压力的情况下还是需要定期整理内存，否则会显存报错，根据业务压力调整时间周期
+sync&&echo 3 > /proc/sys/vm/drop_caches
+
 # 授权协议
 本项目自有代码使用宽松的MIT协议，在保留版权信息的情况下可以自由应用于各自商用、非商业的项目。 但是本项目也零碎的使用了一些其他的开源代码，在商用的情况下请自行替代或剔除； 由于使用本项目而产生的商业纠纷或侵权行为一概与本项目及开发者无关，请自行承担法律风险。 在使用本项目代码时，也应该在授权协议中同时表明本项目依赖的第三方库的协议。
 
