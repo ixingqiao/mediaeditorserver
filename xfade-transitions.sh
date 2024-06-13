@@ -3,7 +3,7 @@
 # Usage: ./xfade-transitions.sh [--srcdir directory] [--files /path/to/1.mp4 /path/to/2.mp4 ...] [--transitions fade wipeleft ...] [--output ./concat/file.mp4] [--interval 1] [--bgmusic /path/to/bgmusic.mp3] [--loopbgmusic]
 # Note: If options are not provided, default values will be used.
 
-# Global variables
+# 默认参数配置
 output_dir="./merge"
 default_transitions=("circlecrop" "circleopen" "circleclose" "dissolve" "fadeblack" "fadewhite" "fade" "horzopen" "horzclose")
 default_interval=1
@@ -11,12 +11,10 @@ output_file="$output_dir/xfade-concat.mp4"
 src_dir="."
 bg_music=""
 loop_bg_music=false
-# 视频设置
-x264=" -c:v h264_nvenc"
-ki="-keyint_min 72 -g 72 -sc_threshold 0"
-br="-b:v 3000k -minrate 3000k -maxrate 6000k -bufsize 6000k -b:a 128k -avoid_negative_ts make_zero -fflags +genpts"
+x264=" -c:v h264_nvenc -preset fast -bf 0"
+ki="-keyint_min 30 -g 60 -sc_threshold 0"
+br="-profile:v high -crf 20 -b:v 4000k -minrate 3000k -maxrate 6000k -bufsize 6000k -avoid_negative_ts make_zero -fflags +genpts"
 
-# Help message function
 function display_help() {
     echo "Usage: $0 [--srcdir directory] [--files /path/to/1.mp4 /path/to/2.mp4 ...] [--transitions fade wipeleft ...] [--output ./concat/file.mp4] [--interval 1] [--bgmusic /path/to/bgmusic.mp3] [--loopbgmusic]"
     echo "Concatenates multiple MP4 files with transitions between them."
@@ -30,17 +28,15 @@ function display_help() {
     echo "  --loopbgmusic                    Loop the background music if its duration is shorter than the concatenated video (default: false)"
 }
 
-# Logging function
 function log() {
     echo "$(date +"%Y-%m-%d %H:%M:%S") - INFO - xfade - $1"
 }
 
-# Error logging function
 function log_error() {
     echo "$(date +"%Y-%m-%d %H:%M:%S") - ERROR - xfade - $1"
 }
 
-# Function to safely remove files
+# 安全删除文件
 function safe_remove() {
     for file in "$@"; do
         if [ -f "$file" ]; then
@@ -52,6 +48,24 @@ function safe_remove() {
     done
 }
 
+# 安全退出避免僵尸进程
+function safe_exit() {
+    log "safe exit: $1"
+    local pids=$(jobs -p)
+    if [ -n "$pids" ]; then
+        log "wait: $pids"
+        for pid in $pids; do
+            log "wait: $pid"
+            wait $pid 2>/dev/null
+            log "game over:$pid"
+        done
+        log "game over"
+    fi
+    exit $1
+}
+
+# 捕获并处理信号
+trap "safe_exit 1" SIGINT SIGTERM
 
 # 函数获取并记录内存状态
 function log_memory_status() {
@@ -61,25 +75,24 @@ function log_memory_status() {
 
 # 函数获取并记录 GPU 状态
 function log_gpu_status() {
-    local nvidia_output=$(nvidia-smi --query-gpu=memory.total,memory.used,memory.free --format=csv)
-    log_error "$nvidia_output"
+    # local nvidia_output=$(nvidia-smi --query-gpu=memory.total,memory.used,memory.free --format=csv)
+    log_error "log_gpu_status"
 }
 
-# Check if FFmpeg is installed
 function check_ffmpeg() {
     if ! command -v ffmpeg &>/dev/null; then
         log_error "FFmpeg is not installed. Please install FFmpeg to proceed."
-        exit 1
+        safe_exit 1
     fi
 }
 
-# Get video duration using ffprobe
+# 获取视频时长
 function get_video_duration() {
     duration=$(ffprobe -v quiet -select_streams v:0 -show_entries format=duration -of default=nokey=1:noprint_wrappers=1 "$1")
     echo "scale=3; $duration/1" | bc -l
 }
 
-# Check if video parameters are consistent
+# 检测视频参数是否一致，若分辨率帧率不一致则不处理
 function check_video_parameters() {
     log "check_video_parameters begin"
     local first_file="$1"
@@ -87,13 +100,12 @@ function check_video_parameters() {
     for file in "$@"; do
         if ! ffprobe -v error -select_streams v:0 -show_entries stream=r_frame_rate,width,height -of csv=p=0 "$first_file" | grep -q "$(ffprobe -v error -select_streams v:0 -show_entries stream=r_frame_rate,width,height -of csv=p=0 "$file")"; then
             log_error "Video parameters are inconsistent. Aborting concatenation."
-            exit 2
+            safe_exit 2
         fi
     done
     log "check_video_parameters end"
 }
 
-# Generate filter_complex string
 function generate_filter_complex() {
     local vfstr=""
     for i in "${index_array[@]}"; do
@@ -125,7 +137,6 @@ function generate_filter_complex() {
     fi
 }
 
-# Concatenate videos with transitions
 function concatenate_with_transitions() {
     local infile=""
     for file in "${filename_array[@]}"; do
@@ -138,13 +149,12 @@ function concatenate_with_transitions() {
     -y \"$output_file\" 2>&1 "
     log "$cmd"
     bash -c "$cmd"
-    # Check if FFmpeg command succeeded
     if [ $? -ne 0 ]; then
         log_error "FFmpeg failed to process the video files."
         log_memory_status
         log_gpu_status
         safe_remove $output_file
-        exit 3
+        safe_exit 3
     fi
 }
 
@@ -162,21 +172,18 @@ function add_background_music() {
     log "add music $cmd"
     bash -c "$cmd"
 
-    # 检查 FFmpeg 命令是否成功执行
     if [ $? -ne 0 ]; then
         log_error "Failed to add bgm."
         log_memory_status
         log_gpu_status
         safe_remove $output_file $temp_output
-        exit 4
+        safe_exit 4
     fi
-
-    # 如果成功，再将临时输出文件覆盖原始视频文件
     mv "$temp_output" "$output_file"
     log "add bgm successfully."
 }
 
-# Parse arguments
+# 参数
 files=()
 transitions=()
 output_specified=false
@@ -224,12 +231,12 @@ while [[ "$#" -gt 0 ]]; do
             ;;
         --help)
             display_help
-            exit 0
+            safe_exit 0
             ;;
         *)
             echo "Error: Unknown option: $1" >&2
             display_help
-            exit 4
+            safe_exit 4
             ;;
     esac
 done
@@ -257,7 +264,7 @@ if [[ -z $output_specified || $output_specified = false ]]; then
     if [[ ! -d "$output_dir" ]]; then
         mkdir -p "$output_dir" || {
             log_error "Failed to create output directory: $output_dir"
-            exit 5
+            safe_exit 5
         }
     fi
     output_file="$output_dir/xfade-concat.mp4"
@@ -290,7 +297,7 @@ length=${#transitions[@]}
 # 确保 length 非零以避免除零错误
 if [[ $length -eq 0 ]]; then
     log_error "No transitions specified. Aborting."
-    exit 6
+    safe_exit 6
 fi
 
 # 记录转换信息
@@ -303,3 +310,4 @@ generate_filter_complex
 log "Filter complex generation completed."
 
 log "xfade end."
+safe_exit 0

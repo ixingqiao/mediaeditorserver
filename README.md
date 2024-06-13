@@ -25,11 +25,11 @@
 支持H264 MP4码流的视频拼接，例如:['1.mp4','2.mp4','3.mp4']
 
 # 硬件加速
-使用专属的硬件Nvidia Cuda 来实现硬件加速的效果，利用nvEnc、nvDec的硬件编解码单元来提速
+使用专属的硬件Nvidia Cuda 可以开启常驻显存模式nvidia-smi -pm 1 来实现硬件加速的效果，利用nvEnc、nvDec的硬件编解码单元来提速，使用cuda_12.5.0_555.42.02_linux.run统一安装，可以解决调用过程中的掉卡，显存不足的问题
 - 通过nvidia-smi dmon 查看使用的效果
-- NVIDIA-SMI 535.171.04             
-- Driver Version: 535.171.04   
-- CUDA Version: 12.2
+- NVIDIA-SMI 555.42.02             
+- Driver Version: 555.42.02   
+- CUDA Version: V12.5.40
 
 # 转场
 支持多个短视频拼接，同时支持配置多个转场设置，多个短视频依次选择多个多个转场效果，若配置1个转场效果则，短视频拼接即使用一个转场，

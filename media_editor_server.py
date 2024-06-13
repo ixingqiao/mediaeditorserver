@@ -9,6 +9,8 @@ import requests
 import psutil
 from flask import Flask, request, jsonify
 from logging.handlers import TimedRotatingFileHandler
+from datetime import datetime, timedelta
+
 
 # 创建日志目录
 if not os.path.exists('./logs'):
@@ -38,14 +40,17 @@ DEFAULT_NOTIFICATION_URL = 'http://127.0.0.1:7070/index/api/OnNotify'
 # 最大并行任务数
 MAX_CONCURRENT_TASKS = 5
 # 最大可执行时间单位秒
-MAX_TASK_EXECUTE_TIME_S = 300
+MAX_TASK_EXECUTE_TIME_S = 180
 # 并行任务计数器
 current_tasks = 0
 # 任务ID计数器
 task_counter = 0
+task_counter_failed = 0
 
 # 锁，用于并发控制
 lock = threading.Lock()
+# 任务状态字典
+tasks_status = {}
 
 def generate_unique_filename():
     """生成包含时间戳和哈希的唯一文件名"""
@@ -68,6 +73,39 @@ def terminate_process_and_children(proc):
         parent.wait(5)  # 等待父进程终止
     except Exception as e:
         logger.error(f'Error terminating process: {e}')
+        
+def clean_old_tasks():
+    """清理超过10分钟的任务状态"""
+    logger.info("clean old tasks begin")
+    while True:
+        logger.info("clean old tasks running")
+        try:
+            with lock:
+                now = datetime.now()
+                expired_keys = []
+                for task_id, info in tasks_status.items():
+                    end_time_str = info.get('endTime', '')
+                    if not end_time_str:
+                        logger.info(f'running task: {task_id}')
+                        continue
+                    try:
+                        end_time = datetime.fromisoformat(end_time_str)
+                        if now - end_time > timedelta(minutes=10):
+                            expired_keys.append(task_id)
+                    except ValueError:
+                        logger.error(f'Invalid isoformat string for task {task_id}: {end_time_str}')
+                        continue
+                for key in expired_keys:
+                    logger.info(f'Cleaning up old task: {key}')
+                    del tasks_status[key]
+        except Exception as e:
+            logger.error(f'Exception {e}')
+        time.sleep(60)  # 每1分钟执行一次清理任务
+    logger.info("clean old tasks end")
+
+# 启动后台线程来清理过期任务
+cleanup_thread = threading.Thread(target=clean_old_tasks, daemon=True, name="clean_old_tasks")
+cleanup_thread.start()
 
 def send_task_status_notification(notification_url, task_id, status, message, output_path):
     """发送任务状态通知"""
@@ -77,7 +115,7 @@ def send_task_status_notification(notification_url, task_id, status, message, ou
                 response = requests.post(notification_url, json={
                     'taskId': task_id,
                     'status': status,
-                    'message': message,
+                    'msg': message,
                     'outputFile': output_path
                 }, timeout=5)  # 设置超时时间为5秒
                 if response.status_code == 200:
@@ -93,7 +131,7 @@ def send_task_status_notification(notification_url, task_id, status, message, ou
 
 def execute_task(notification_url, task_id, video_files, transitions, output_path, interval,bgMusic):
     logger.info(f'execute task begin {task_id} {output_path} {bgMusic}')
-    global current_tasks
+    global current_tasks, task_counter_failed
     try:
         # 生成命令
         cmd = ['/opt/umes/xfade-transitions.sh']
@@ -109,6 +147,11 @@ def execute_task(notification_url, task_id, video_files, transitions, output_pat
             cmd.extend(['--bgmusic', bgMusic])
             cmd.extend(['--loopbgmusic'])
 
+        # 更新任务状态为运行中
+        with lock:
+            tasks_status[task_id].update({
+                'status': 'running',
+            })
         # 运行命令
         status = 'failed'
         error_message = ''
@@ -129,8 +172,6 @@ def execute_task(notification_url, task_id, video_files, transitions, output_pat
         try:
             # 任务的最大运行时间
             proc.wait(timeout=MAX_TASK_EXECUTE_TIME_S)
-            # terminate_process_and_children(proc)
-            # logger.info(f'{stdout}')
             if proc.returncode != 0:
                 error_message = f'Task failed: {proc.returncode}'
                 logger.error(error_message)
@@ -147,12 +188,18 @@ def execute_task(notification_url, task_id, video_files, transitions, output_pat
     finally:
         log_thread.join(timeout=5)  # 等待线程结束
         if log_thread.is_alive():
-            logger.error("log thread, killing")
-            log_thread.kill()
+            logger.error("log thread is alive")
         # 释放并行任务计数器
         with lock:
+            tasks_status[task_id].update({
+                'status': status,
+                'msg': error_message,
+                'endTime': datetime.now().isoformat()
+            })
             current_tasks -= 1
             logger.info(f'number of tasks: {current_tasks}')
+        if status == 'failed':
+            task_counter_failed += 1
         # 发送任务执行结果通知
         send_task_status_notification(notification_url, task_id, status, error_message, output_path)
         logger.info(f'execute task end')
@@ -176,28 +223,28 @@ def merge_video():
             logger.error('Invalid videoFiles parameter')
             return jsonify({'code': 1004, 'msg': 'Invalid input: videoFiles must be a list of strings'}), 400
         if not video_files or not 2 <= len(video_files) <= 20:
-            return jsonify({'code': 1004, 'msg': 'Invalid input: videoFiles '}), 400
+            return jsonify({'code': 1005, 'msg': 'Invalid input: videoFiles '}), 400
         # 在执行任务之前检查视频文件是否存在
         for video_file in video_files:
             if not os.path.isfile(video_file):
                 logger.error(f'Video file not found: {video_file}')
-                return jsonify({'code': 1004, 'msg': f'Video file not found: {video_file}'}), 400
+                return jsonify({'code': 1006, 'msg': f'Video file not found: {video_file}'}), 400
         
         if not isinstance(transitions, list) or not all(isinstance(item, str) for item in transitions):
             logger.error('Invalid transitions parameter')
-            return jsonify({'code': 1005, 'msg': 'Invalid input: transitions must be a list of strings'}), 400
+            return jsonify({'code': 1007, 'msg': 'Invalid input: transitions must be a list of strings'}), 400
 
-        if not isinstance(interval, int) or interval <= 0:
+        if not isinstance(interval, int) or interval <= 0 or interval > 5:
             logger.error('Invalid interval parameter')
-            return jsonify({'code': 1006, 'msg': 'Invalid input: interval must be a positive integer'}), 400
+            return jsonify({'code': 1008, 'msg': 'Invalid input: interval must be a positive integer'}), 400
 
         if not isinstance(bgMusic, str) or bgMusic and not os.path.isfile(bgMusic):
-            logger.error('Invalid interval parameter')
-            return jsonify({'code': 1006, 'msg': 'Invalid input: bgMusic'}), 400
+            logger.error('Invalid bgMusic parameter')
+            return jsonify({'code': 1009, 'msg': 'Invalid input: bgMusic'}), 400
             
         if notification_url and not isinstance(notification_url, str):
             logger.error('Invalid notificationUrl parameter')
-            return jsonify({'code': 1009, 'msg': 'Invalid input: notificationUrl must be a string'}), 400
+            return jsonify({'code': 1010, 'msg': 'Invalid input: notificationUrl must be a string'}), 400
 
         # 检查当前任务数是否已经达到最大值
         with lock:
@@ -207,38 +254,51 @@ def merge_video():
             current_tasks += 1
             task_counter += 1
             logger.info(f'number of tasks: {current_tasks}')
-        try:
-            # 执行视频拼接线程
-            task_id = hashlib.md5((str(time.time()) + output_path).encode('utf-8')).hexdigest()[:8]
-            logger.info(f'Task: {task_id} {video_files} {transitions} {output_path} {interval} {notification_url} {bgMusic}')
-            task_thread = threading.Thread(target=execute_task, args=(notification_url, task_id, video_files, transitions, output_path, interval, bgMusic), name="execute_task")
-            task_thread.start()
-        except Exception as e:
-            with lock:
+            try:
+                # 执行视频拼接线程
+                task_id = hashlib.md5((str(time.time()) + output_path).encode('utf-8')).hexdigest()[:8]
+                # 初始化任务状态
+                tasks_status[task_id] = {
+                    'status': 'created',
+                    'startTime': datetime.now().isoformat(),
+                    'msg': "",
+                    'endTime': ""
+                }
+                logger.info(f'Task: {task_id} {video_files} {transitions} {output_path} {interval} {notification_url} {bgMusic}')
+                task_thread = threading.Thread(target=execute_task, args=(notification_url, task_id, video_files, transitions, output_path, interval, bgMusic), name="execute_task")
+                task_thread.start()
+            except Exception as e:
                 current_tasks -= 1
                 logger.error(f'Failed to start thread: {e}', exc_info=True)
-            return jsonify({'code': 1008, 'msg': 'Failed to start processing thread'}), 500
+                return jsonify({'code': 1011, 'msg': 'Failed to start processing thread'}), 500
 
-        # 返回任务提交成功的响应
-        return jsonify({'code': 0, 'msg': 'Task submitted successfully', 'data': {'taskId': task_id, 'outputFile': output_path}})
+            # 返回任务提交成功的响应
+            return jsonify({'code': 0, 'msg': 'Task submitted successfully', 'data': {'taskId': task_id, 'outputFile': output_path}})
     except Exception as e:
         logger.error(f'Error processing request: {e}', exc_info=True)
         return jsonify({'code': 1002, 'msg': 'Internal Server Error'}), 500
 
-@app.route('/index/api/tasksStatus', methods=['GET'])
+@app.route('/index/api/serverStatus', methods=['GET'])
 def status():
     return jsonify({
         'code': 0, 
         'msg': '', 
         'data': {
-            'currTasks': current_tasks,
-            'maxTasks': MAX_CONCURRENT_TASKS,
+            'currExecuteTasks': current_tasks,
+            'maxExecuteTasks': MAX_CONCURRENT_TASKS,
             'taskCounter':task_counter,
-            'defaultOutputPath':XFADE_OUTPUT_PATH,
-            'maxTaskExecuteSecond':MAX_TASK_EXECUTE_TIME_S,
-            'defaultNotifyUrl': DEFAULT_NOTIFICATION_URL
+            'taskCounterFailed':task_counter_failed
          }
     })
+
+@app.route('/index/api/taskStatus/<task_id>', methods=['GET'])
+def task_status(task_id):
+    with lock:
+        task_info = tasks_status.get(task_id)
+        if task_info:
+            return jsonify({'code': 0, 'msg': '', 'data': task_info})
+        else:
+            return jsonify({'code': 1012, 'msg': 'Task not found'}), 404
 
 @app.route('/index/api/version', methods=['GET'])
 def version():
@@ -250,9 +310,47 @@ def version():
             return jsonify({'code': 0, 'msg': '', 'data': version_info})
         else:
             logger.error('version.json file not found')
-            return jsonify({'code': 1007, 'msg': 'version.json file not found'}), 500
+            return jsonify({'code': 1013, 'msg': 'version.json file not found'}), 500
     except Exception as e:
         logger.error(f'Error reading version.json: {e}', exc_info=True)
+        return jsonify({'code': 1002, 'msg': 'Internal Server Error'}), 500
+
+# 新增修改全局配置项接口
+@app.route('/index/api/config', methods=['PUT'])
+def update_config():
+    global XFADE_OUTPUT_PATH, DEFAULT_NOTIFICATION_URL, MAX_CONCURRENT_TASKS, MAX_TASK_EXECUTE_TIME_S
+    try:
+        post_params = request.get_json()
+        if not post_params:
+            return jsonify({'code': 1014, 'msg': 'Invalid input: No JSON payload provided'}), 400
+
+        if 'defaultOutputPath' in post_params:
+            XFADE_OUTPUT_PATH = post_params['defaultOutputPath']
+        if 'defaultNotifyUrl' in post_params:
+            DEFAULT_NOTIFICATION_URL = post_params['defaultNotifyUrl']
+        if 'maxExecuteTasks' in post_params:
+            MAX_CONCURRENT_TASKS = int(post_params['maxExecuteTasks'])
+        if 'maxTaskExecuteSecond' in post_params:
+            MAX_TASK_EXECUTE_TIME_S = int(post_params['maxTaskExecuteSecond'])
+
+        return jsonify({'code': 0, 'msg': ''})
+    except Exception as e:
+        logger.error(f'Error updating configuration: {e}', exc_info=True)
+        return jsonify({'code': 1002, 'msg': 'Internal Server Error'}), 500
+
+# 新增查询全局配置项接口
+@app.route('/index/api/config', methods=['GET'])
+def get_config():
+    try:
+        config = {
+            'defaultOutputPath': XFADE_OUTPUT_PATH,
+            'defaultNotifyUrl': DEFAULT_NOTIFICATION_URL,
+            'maxExecuteTasks': MAX_CONCURRENT_TASKS,
+            'maxTaskExecuteSecond': MAX_TASK_EXECUTE_TIME_S
+        }
+        return jsonify({'code': 0, 'msg': '', 'data': config})
+    except Exception as e:
+        logger.error(f'Error fetching configuration: {e}', exc_info=True)
         return jsonify({'code': 1002, 'msg': 'Internal Server Error'}), 500
 
 # 自测异步通知地址

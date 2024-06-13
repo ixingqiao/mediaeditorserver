@@ -26,7 +26,7 @@
 				"header": [],
 				"body": {
 					"mode": "raw",
-					"raw": "{\r\n    \"videoFiles\": [\"/data/huaxue/huaxue_0000.mp4\",\"/data/huaxue/huaxue_0007.mp4\", \"/data/huaxue/huaxue_0008.mp4\",\"/data/huaxue/huaxue_0021.mp4\", \"/data/huaxue/huaxue_0025.mp4\"],\r\n    \"transitions\": [\"circlecrop\", \"rectcrop\",\"slideright\",\"pixelize\"],\r\n    \"interval\": 1,\r\n    \"bgMusic\":\"/data/bgm/只要平凡.ogg\"\r\n}",
+					"raw": "{\r\n    \"videoFiles\": [\"/data/huaxue/huaxue_0000.mp4\",\"/data/huaxue/huaxue_0007.mp4\", \"/data/huaxue/huaxue_0008.mp4\",\"/data/huaxue/huaxue_0021.mp4\"],\r\n    \"transitions\": [\"circlecrop\", \"rectcrop\",\"slideright\",\"pixelize\"],\r\n    \"interval\": 1,\r\n    \"bgMusic\":\"/data/bgm/只要平凡.ogg\"\r\n}",
 					"options": {
 						"raw": {
 							"language": "json"
@@ -71,7 +71,7 @@
 				"header": [],
 				"body": {
 					"mode": "raw",
-					"raw": "{\r\n    \"srcDir\": \"/data/90\",\r\n    \"transitions\": [\"circleopen\", \"fade\", \"wipeleft\"]\r\n}",
+					"raw": "",
 					"options": {
 						"raw": {
 							"language": "json"
@@ -87,6 +87,51 @@
 						"index",
 						"api",
 						"version"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "服务状态",
+			"event": [
+				{
+					"listen": "prerequest",
+					"script": {
+						"exec": [
+							"// 获取当前时间并格式化为指定格式\r",
+							"const date = new Date();\r",
+							"date.setHours(date.getHours() + 8); // 增加8个小时以转换为北京时间\r",
+							"pm.environment.set(\"current_time\", date.toISOString().replace(\"T\", \" \").slice(0, -1));"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"protocolProfileBehavior": {
+				"disableBodyPruning": true
+			},
+			"request": {
+				"method": "GET",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{UMES_URL}}/index/api/serverStatus",
+					"host": [
+						"{{UMES_URL}}"
+					],
+					"path": [
+						"index",
+						"api",
+						"serverStatus"
 					]
 				}
 			},
@@ -116,7 +161,7 @@
 				"header": [],
 				"body": {
 					"mode": "raw",
-					"raw": "{\r\n    \"srcDir\": \"/data/90\",\r\n    \"transitions\": [\"circleopen\", \"fade\", \"wipeleft\"]\r\n}",
+					"raw": "",
 					"options": {
 						"raw": {
 							"language": "json"
@@ -124,14 +169,102 @@
 					}
 				},
 				"url": {
-					"raw": "{{UMES_URL}}/index/api/tasksStatus",
+					"raw": "{{UMES_URL}}/index/api/taskStatus/4053ed89",
 					"host": [
 						"{{UMES_URL}}"
 					],
 					"path": [
 						"index",
 						"api",
-						"tasksStatus"
+						"taskStatus",
+						"4053ed89"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "查询全局配置",
+			"event": [
+				{
+					"listen": "prerequest",
+					"script": {
+						"exec": [
+							"// 获取当前时间并格式化为指定格式\r",
+							"const date = new Date();\r",
+							"date.setHours(date.getHours() + 8); // 增加8个小时以转换为北京时间\r",
+							"pm.environment.set(\"current_time\", date.toISOString().replace(\"T\", \" \").slice(0, -1));"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"protocolProfileBehavior": {
+				"disableBodyPruning": true
+			},
+			"request": {
+				"method": "GET",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{UMES_URL}}/index/api/config",
+					"host": [
+						"{{UMES_URL}}"
+					],
+					"path": [
+						"index",
+						"api",
+						"config"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "设置全局配置",
+			"event": [
+				{
+					"listen": "prerequest",
+					"script": {
+						"exec": [
+							"// 获取当前时间并格式化为指定格式\r",
+							"const date = new Date();\r",
+							"date.setHours(date.getHours() + 8); // 增加8个小时以转换为北京时间\r",
+							"pm.environment.set(\"current_time\", date.toISOString().replace(\"T\", \" \").slice(0, -1));"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "PUT",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"defaultNotifyUrl\": \"http://127.0.0.1:7070/index/api/OnNotify\",\r\n    \"defaultOutputPath\": \"/data/xfade\",\r\n    \"maxExecuteTasks\": 6,\r\n    \"maxTaskExecuteSecond\": 180\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{UMES_URL}}/index/api/config",
+					"host": [
+						"{{UMES_URL}}"
+					],
+					"path": [
+						"index",
+						"api",
+						"config"
 					]
 				}
 			},
