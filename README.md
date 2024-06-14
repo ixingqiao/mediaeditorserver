@@ -81,7 +81,7 @@ sudo docker build --force-rm --no-cache -f=./Dockerfile -t ${image_name2}:${imag
 # 服务运行
 如下命令运行：
 ```bash
-docker run -itd --gpus all -e NVIDIA_DRIVER_CAPABILITIES=all --name umes --hostname umes --privileged=true --net=host -v /data/:/data -v /usr/local/cuda/:/usr/local/cuda/ umes-x86:1.0.1.20240522
+docker run -itd --ulimit core=0 --gpus all -e NVIDIA_DRIVER_CAPABILITIES=all --name umes --hostname umes --privileged=true --net=host -v /data/:/data -v /usr/local/cuda/:/usr/local/cuda/ reg.uni-ubi.com/audiovideoservice/umes-x86:1.0.1.20240522
 ```
 
 服务运行的工作目录/opt/umes/ 默认端口：7070

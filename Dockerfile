@@ -45,4 +45,4 @@ RUN ulimit -c 0
 # …Ë÷√»›∆˜∆Ù∂Ø√¸¡Ó
 CMD ["/opt/umes/venv/bin/python", "/opt/umes/media_editor_server.py"]
 
-# docker run -itd --gpus all -e NVIDIA_DRIVER_CAPABILITIES=all --name umes --hostname umes --privileged=true --net=host -v /data/:/data -v /usr/local/cuda/:/usr/local/cuda/ reg.uni-ubi.com/audiovideoservice/umes-x86:1.0.1.20240522
+# docker run -itd --ulimit core=0 --gpus all -e NVIDIA_DRIVER_CAPABILITIES=all --name umes --hostname umes --privileged=true --net=host -v /data/:/data -v /usr/local/cuda/:/usr/local/cuda/ reg.uni-ubi.com/audiovideoservice/umes-x86:1.0.1.20240522
