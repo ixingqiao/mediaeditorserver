@@ -141,7 +141,7 @@ sysctl -p
 
 ## 在高压力的情况下还是需要定期整理内存，否则会显存报错，根据业务压力调整时间周期
 ```bash
-sync&&echo 3 > /proc/sys/vm/drop_caches
+sync&&echo 1 > /proc/sys/vm/drop_caches
 ```
 
 # 授权协议
